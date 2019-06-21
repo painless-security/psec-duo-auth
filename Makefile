@@ -9,7 +9,10 @@ LIBS=-ljansson -lssl -lcrypto
 psec-duo-auth: psec-duo-auth.o libduo/libduo.a
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
-libduo/Makefile:
+libduo/configure:
+	git submodule update --init
+
+libduo/Makefile: libduo/configure
 	cd libduo && ./configure
 
 libduo/libduo.a: libduo/Makefile
@@ -21,7 +24,7 @@ install:
 	mkdir -p $(DESTDIR)/usr/bin
 	cp -f psec-duo-auth $(DESTDIR)/usr/bin/
 
-clean:
+clean: libduo/Makefile
 	rm -f *.o *~
 	cd libduo && make clean
 
