@@ -2,7 +2,7 @@ Source: psec-duo-auth
 Section: network
 Priority: optional
 Maintainer: Painless Security, LLC <support@painless-security.com>
-Build-Depends: debhelper (>= 9), libduo-dev (<< 1.9.21), libjansson-dev
+Build-Depends: debhelper (>= 9), libssl1.0-dev, libjansson-dev
 Standards-Version: 3.9.8
 
 Package: psec-duo-auth
