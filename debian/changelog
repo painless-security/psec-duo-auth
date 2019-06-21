@@ -1,3 +1,10 @@
+psec-duo-auth (1.0.1) unstable; urgency=medium
+
+  * Packaging fixes
+  * Expect correct status for preauth when two-factor is bypassed
+
+ -- Painless Security, LLC <support@painless-security.com>  Thu, 20 Jun 2019 04:16:33 +0000
+
 psec-duo-auth (1.0) unstable; urgency=medium
 
   * Initial Release.
