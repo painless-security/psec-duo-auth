@@ -204,12 +204,12 @@ int main(int argc, char *argv[])
     return EXIT_FAIL;
   }
 
-  if (0 == strcmp(duoAuth->ok.preauth.result, "accept")) {
-    /* accept means no Duo auth is required for this user */
+  if (0 == strcmp(duoAuth->ok.preauth.result, "allow")) {
+    /* allow means no Duo auth is required for this user */
     printf("%s\n", duoAuth->ok.preauth.status_msg);
     return EXIT_OK;
   } else if (0 != strcmp(duoAuth->ok.preauth.result, "auth")) {
-    /* anything other than accept or auth - reject the user */
+    /* anything other than allow or auth - reject the user */
     printf("%s\n", duoAuth->ok.preauth.status_msg);
     return EXIT_REJECT;
   }
