@@ -24,9 +24,9 @@ install:
 	mkdir -p $(DESTDIR)/usr/bin
 	cp -f psec-duo-auth $(DESTDIR)/usr/bin/
 
-clean: libduo/Makefile
+clean:
 	rm -f *.o *~
-	cd libduo && make clean
+	test ! -f libduo/Makefile || (cd libduo && make clean)
 
 distclean: clean
-	cd libduo && make distclean
+	test ! -f libduo/Makefile || (cd libduo && make distclean)
