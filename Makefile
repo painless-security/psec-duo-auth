@@ -1,15 +1,21 @@
 CC=gcc
 CFLAGS=
 
-LIBS=-lduo -ljansson
+LIBS=-ljansson -lssl -lcrypto
 
 .o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-psec-duo-auth: psec-duo-auth.o
+psec-duo-auth: psec-duo-auth.o libduo/libduo.a
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
-.PHONY: clean
+libduo/Makefile:
+	cd libduo && ./configure
+
+libduo/libduo.a: libduo/Makefile
+	cd libduo && make libduo.a
+
+.PHONY: clean distclean install libduo/libduo.a
 
 install:
 	mkdir -p $(DESTDIR)/usr/bin
@@ -17,3 +23,7 @@ install:
 
 clean:
 	rm -f *.o *~
+	cd libduo && make clean
+
+distclean: clean
+	cd libduo && make distclean

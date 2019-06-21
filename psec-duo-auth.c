@@ -2,15 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <jansson.h>
-#include <duo.h>
 #include <argp.h>
+
+#include "libduo/duo.h"
 
 #define PROGRAM_NAME "psec-duo-auth"
 #define PROGRAM_VERSION "1.0"
-
-/* HTTPS connection timeout limits in ms */
-#define MIN_HTTPS_TIMEOUT 100
-#define MAX_HTTPS_TIMEOUT 30000
 
 /* Argument parser configuration */
 /* argp_program_version is used internally by the argp library */
@@ -22,13 +19,11 @@ static struct argp_option options[] = {
     {"config",  'c', "CFG_FILE", 0, "Configuration file path"},
     {"user",    'u', "USER",     0, "Duo username to authenticate"},
     {"message", 'm', "MESSAGE", 0, "Message to be displayed in Duo push notification"},
-    {"timeout", 't', "TIMEOUT",  0, "HTTPS timeout (milliseconds, default 3000, must be between 100 and 30000"},
     {NULL}
 };
 
 struct arguments {
   char *cfgPath;
-  long httpsTimeout;
   char *message;
   char *user;
 };
@@ -49,13 +44,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
     case 'm':
       args->message = arg;
       break;
-
-    case 't':
-      printf("%s", arg);
-      fflush(stdout);
-      args->httpsTimeout = strtol(arg, NULL, 10);
-      break;
-
 
     default:
       return ARGP_ERR_UNKNOWN;
@@ -144,6 +132,7 @@ static int parse_duo_config(const char *filename, psec_duo_config_t *psecDuoConf
   return 0;
 }
 
+
 /* FreeRADIUS exec exit codes */
 /* auth ok */
 #define EXIT_OK 0
@@ -154,12 +143,11 @@ static int parse_duo_config(const char *filename, psec_duo_config_t *psecDuoConf
 /* module failed */
 #define EXIT_FAIL 2
 
-
 int main(int argc, char *argv[])
 {
   duo_t *duo;
-  duo_code_t duoResult;
-  const char *duoErrMsg;
+  struct duo_auth *duoAuth;
+  struct duo_push_params duoPushParams;
 
   psec_duo_config_t psecDuoConfig;
 
@@ -169,7 +157,6 @@ int main(int argc, char *argv[])
 
   /* set default arguments */
   args.cfgPath = NULL;
-  args.httpsTimeout = 3000;
   args.message = NULL;
   args.user = NULL;
 
@@ -188,11 +175,6 @@ int main(int argc, char *argv[])
     printf("User to authenticate not specified\n");
   }
 
-  if ((args.httpsTimeout < MIN_HTTPS_TIMEOUT) || (args.httpsTimeout > MAX_HTTPS_TIMEOUT)) {
-    argsOk = 0;
-    printf("Timeout must be between %d and %d milliseconds\n", MIN_HTTPS_TIMEOUT, MAX_HTTPS_TIMEOUT);
-  }
-
   if (!argsOk) {
     return EXIT_FAIL;
   }
@@ -202,50 +184,61 @@ int main(int argc, char *argv[])
     return EXIT_FAIL;
   }
 
-  duo = duo_open(psecDuoConfig.apiHost,
+  duo = duo_init(psecDuoConfig.apiHost,
                  psecDuoConfig.integrationKey,
                  psecDuoConfig.secretKey,
                  PROGRAM_NAME "/" PROGRAM_VERSION,
                  NULL, /* cafile */
-                 (int) args.httpsTimeout);
+                 NULL /* proxy */
+		 ); 
 
   if (!duo) {
-    fprintf(stderr, "Failed to initialize Duo auth library: %s\n", duo_geterr(duo));
+    fprintf(stderr, "Failed to initialize Duo auth library: %s\n", duo_get_error(duo));
     exit(EXIT_FAIL);
   }
 
-  duo_set_conv_funcs(duo, NULL, NULL, NULL);
-
-  duoResult = duo_login(duo,
-                        args.user,
-                        NULL, /* client_ip */
-                        DUO_FLAG_SYNC | DUO_FLAG_AUTO,
-                        args.message /* command */
-  );
-
-  switch (duoResult) {
-    case DUO_OK:
-      /* Authentication succeeded */
-      printf("Duo authentication succeeded for %s\n", args.user);
-      returnCode = EXIT_OK;
-      break;
-
-    case DUO_FAIL:
-      /* Authentication failed */
-      printf("Duo authentication failed for %s\n", args.user);
-      returnCode = EXIT_REJECT;
-      break;
-
-    default:
-      /* Something went wrong */
-      returnCode = EXIT_FAIL;
-      duoErrMsg = duo_geterr(duo);
-      if (duoErrMsg) {
-        printf("Duo error: %s\n", duo_geterr(duo));
-      }
-      break;
+  /* Start wth a preauth */
+  duoAuth = duo_auth_preauth(duo, args.user);
+  if (!duoAuth) {
+    printf("Duo preauth failed: %s\n", duo_get_error(duo));
+    return EXIT_FAIL;
   }
 
+  if (0 == strcmp(duoAuth->ok.preauth.result, "accept")) {
+    /* accept means no Duo auth is required for this user */
+    printf("%s\n", duoAuth->ok.preauth.status_msg);
+    return EXIT_OK;
+  } else if (0 != strcmp(duoAuth->ok.preauth.result, "auth")) {
+    /* anything other than accept or auth - reject the user */
+    printf("%s\n", duoAuth->ok.preauth.status_msg);
+    return EXIT_REJECT;
+  }
+  duo_auth_free(duoAuth);
+
+  /* Duo auth needed, continue */
+  duoPushParams.device = "auto";
+  duoPushParams.type = NULL;
+  duoPushParams.display_username = NULL;
+  duoPushParams.pushinfo = NULL;
+
+  duoAuth = duo_auth_auth(duo, args.user, "push", NULL, &duoPushParams);
+  
+  if (!duoAuth) {
+    printf("Duo auth failed: %s\n", duo_get_error(duo));
+    return EXIT_FAIL;
+  }
+
+  if (0 == strcmp(duoAuth->ok.auth.result, "allow")) {
+    /* Authentication succeeded */
+    printf("Duo authentication succeeded for %s\n", args.user);
+    return EXIT_OK;
+  }
+  
+  /* Authentication failed */
+  printf("Duo authentication failed for %s\n", args.user);
+  return EXIT_REJECT;
+
+  duo_auth_free(duoAuth);
   duo_close(duo);
 
   return returnCode;
