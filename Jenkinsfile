@@ -31,6 +31,9 @@ pipeline {
     stage('Build') {
       steps {
         dir('psec-duo-auth') {
+          sh label: 'Update submodule',
+             script: 'git submodule update --init'
+             
           sh label: 'Build package',
              script: '''pdebuild --pbuilder cowbuilder \
                                  --buildresult "${BUILDRESULT}" \
