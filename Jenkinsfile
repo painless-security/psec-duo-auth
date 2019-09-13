@@ -8,7 +8,7 @@ pipeline {
   
   // Sets environment for shell commands; available to Groovy script in env.*
   environment {
-    DISTRIBUTION = 'buster'
+    DISTRIBUTION = 'stretch'
     ARCH = 'amd64'
 
     // n.b., the substitutions in the next lines are in Groovy, not shell script.
